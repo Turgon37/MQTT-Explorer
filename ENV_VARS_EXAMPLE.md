@@ -42,6 +42,14 @@ export MQTT_EXPLORER_SKIP_AUTH=true  # Or configure authentication
 export MQTT_AUTO_CONNECT_HOST=mqtt.example.com
 export MQTT_AUTO_CONNECT_PORT=1883
 
+# Optional TLS client certificate files mounted in the container/pod
+# Useful with Kubernetes secrets mounted as files
+# export MQTT_AUTO_CONNECT_PROTOCOL=mqtts
+# export MQTT_AUTO_CONNECT_CERT_VALIDATION=true
+# export MQTT_AUTO_CONNECT_CA_FILE=/var/run/secrets/mqtt/ca.crt
+# export MQTT_AUTO_CONNECT_CLIENT_CERT_FILE=/var/run/secrets/mqtt/tls.crt
+# export MQTT_AUTO_CONNECT_CLIENT_KEY_FILE=/var/run/secrets/mqtt/tls.key
+
 # LLM Configuration
 export LLM_PROVIDER=gemini
 export GEMINI_API_KEY=AIzaxxxxxxxxxxxxxxxxxxxx
@@ -76,6 +84,10 @@ docker run -d \
   -e LLM_PROVIDER=openai \
   -e LLM_NEIGHBORING_TOPICS_TOKEN_LIMIT=500 \
   -e MQTT_AUTO_CONNECT_HOST=mqtt.example.com \
+  -e MQTT_AUTO_CONNECT_CERT_VALIDATION=true \
+  -e MQTT_AUTO_CONNECT_CA_FILE=/run/secrets/mqtt/ca.crt \
+  -e MQTT_AUTO_CONNECT_CLIENT_CERT_FILE=/run/secrets/mqtt/tls.crt \
+  -e MQTT_AUTO_CONNECT_CLIENT_KEY_FILE=/run/secrets/mqtt/tls.key \
   -p 3000:3000 \
   mqtt-explorer
 ```

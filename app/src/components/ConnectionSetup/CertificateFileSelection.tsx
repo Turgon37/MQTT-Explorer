@@ -5,7 +5,7 @@ import { Button, Theme, Tooltip, Typography } from '@mui/material'
 import { connect } from 'react-redux'
 import { withStyles } from '@mui/styles'
 import { CertificateParameters, ConnectionOptions } from '../../model/ConnectionOptions'
-import { CertificateTypes } from '../../actions/ConnectionManager'
+import { certificateTypeToPathField, CertificateTypes } from '../../actions/ConnectionManager'
 import { connectionManagerActions } from '../../actions'
 import ClearAdornment from '../helper/ClearAdornment'
 
@@ -19,11 +19,13 @@ function CertificateFileSelection(props: {
   }
   connection: ConnectionOptions
 }) {
+  const certificatePathField = certificateTypeToPathField(props.certificateType)
   const clearCertificate = React.useCallback(() => {
     props.actions.connectionManager.updateConnection(props.connection.id, {
+      [certificatePathField]: undefined,
       [props.certificateType]: undefined,
     })
-  }, [props.connection, props.certificateType])
+  }, [certificatePathField, props.connection, props.certificateType])
 
   return (
     <span>

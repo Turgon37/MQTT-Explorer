@@ -7,10 +7,23 @@ import { store } from './store'
 import { TopicViewModel } from './model/TopicViewModel'
 import { showTree } from './actions/Tree'
 import { connecting, connected } from './actions/Connection'
+import { addConnection, selectConnection } from './actions/ConnectionManager'
+import { ConnectionOptions } from './model/ConnectionOptions'
 import { makeConnectionStateEvent, rendererEvents } from './eventBus'
+
+function applyAutoConnectConnection(connection: ConnectionOptions) {
+  store.dispatch(addConnection(connection) as any)
+  store.dispatch(selectConnection(connection.id) as any)
+}
 
 // Listen for auto-connect-initiated event from server
 if (typeof window !== 'undefined') {
+  window.addEventListener('mqtt-auto-connect-config', ((event: CustomEvent) => {
+    const { connection } = event.detail
+    console.log('Auto-connect configuration received from server:', connection)
+    applyAutoConnectConnection(connection)
+  }) as EventListener)
+
   window.addEventListener('mqtt-auto-connect-initiated', ((event: CustomEvent) => {
     const { connectionId } = event.detail
     console.log('Auto-connect initiated from server, connectionId:', connectionId)

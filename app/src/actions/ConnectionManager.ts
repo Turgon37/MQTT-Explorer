@@ -42,8 +42,21 @@ export const loadConnectionSettings = () => async (dispatch: Dispatch<any>, getS
     return
   }
 
-  dispatch(setConnections(connections))
-  const firstKey = Object.keys(connections)[0]
+  const runtimeConnections = getState().connectionManager.connections
+  const mergedConnections = {
+    ...connections,
+    ...runtimeConnections,
+  }
+
+  dispatch(setConnections(mergedConnections))
+
+  const selectedConnection = getState().connectionManager.selected
+  if (selectedConnection && mergedConnections[selectedConnection]) {
+    dispatch(selectConnection(selectedConnection))
+    return
+  }
+
+  const firstKey = Object.keys(mergedConnections)[0]
   if (firstKey) {
     dispatch(selectConnection(firstKey))
   } else {
@@ -53,12 +66,27 @@ export const loadConnectionSettings = () => async (dispatch: Dispatch<any>, getS
 }
 
 export type CertificateTypes = 'selfSignedCertificate' | 'clientCertificate' | 'clientKey'
+export type CertificatePathTypes = 'selfSignedCertificatePath' | 'clientCertificatePath' | 'clientKeyPath'
+
+export function certificateTypeToPathField(type: CertificateTypes): CertificatePathTypes {
+  switch (type) {
+    case 'selfSignedCertificate':
+      return 'selfSignedCertificatePath'
+    case 'clientCertificate':
+      return 'clientCertificatePath'
+    case 'clientKey':
+      return 'clientKeyPath'
+  }
+}
+
 export const selectCertificate =
   (type: CertificateTypes, connectionId: string) => async (dispatch: Dispatch<any>, getState: () => AppState) => {
     try {
       const certificate = await openCertificate()
+      const pathField = certificateTypeToPathField(type)
       dispatch(
         updateConnection(connectionId, {
+          [pathField]: undefined,
           [type]: certificate,
         })
       )

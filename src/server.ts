@@ -28,6 +28,104 @@ const enableUpgradeInsecure = process.env.UPGRADE_INSECURE_REQUESTS === 'true'
 // Enable X-Frame-Options header to prevent iframe embedding (disabled by default)
 const enableXFrameOptions = process.env.X_FRAME_OPTIONS === 'true'
 
+function normalizeBasePath(basePath?: string): string | undefined {
+  if (!basePath) {
+    return undefined
+  }
+
+  const normalized = basePath.replace(/^\/+|\/+$/g, '')
+  return normalized.length > 0 ? normalized : undefined
+}
+
+function getPathConfiguredEnv(...names: string[]): string | undefined {
+  for (const name of names) {
+    const value = process.env[name]
+    if (value) {
+      return value
+    }
+  }
+
+  return undefined
+}
+
+function parseBooleanEnv(value: string | undefined, defaultValue: boolean): boolean {
+  if (value === undefined) {
+    return defaultValue
+  }
+
+  return ['true', '1', 'yes', 'on'].includes(value.toLowerCase())
+}
+
+function buildAutoConnectConfig(connectionId: string) {
+  const host = process.env.MQTT_AUTO_CONNECT_HOST
+  if (!host) {
+    return undefined
+  }
+
+  const rawProtocol = process.env.MQTT_AUTO_CONNECT_PROTOCOL || 'mqtt'
+  const protocol = rawProtocol.startsWith('ws') ? 'ws' : 'mqtt'
+  const encryption = rawProtocol.endsWith('s')
+  const port = parseInt(process.env.MQTT_AUTO_CONNECT_PORT || '1883', 10)
+  const basePath = protocol === 'ws' ? normalizeBasePath(process.env.MQTT_AUTO_CONNECT_BASE_PATH) : undefined
+  const url = `${protocol}://${host}:${port}${basePath ? `/${basePath}` : ''}`
+  const clientId = process.env.MQTT_AUTO_CONNECT_CLIENT_ID || `mqtt-explorer-${Math.random().toString(16).substr(2, 8)}`
+  const subscriptions = [{ topic: '#', qos: 0 as 0 | 1 | 2 }]
+  const certificateAuthorityPath = getPathConfiguredEnv('MQTT_AUTO_CONNECT_CA_FILE', 'MQTT_AUTO_CONNECT_CA_PATH')
+  const clientCertificatePath = getPathConfiguredEnv(
+    'MQTT_AUTO_CONNECT_CLIENT_CERT_FILE',
+    'MQTT_AUTO_CONNECT_CLIENT_CERT_PATH'
+  )
+  const clientKeyPath = getPathConfiguredEnv('MQTT_AUTO_CONNECT_CLIENT_KEY_FILE', 'MQTT_AUTO_CONNECT_CLIENT_KEY_PATH')
+  const certValidation = parseBooleanEnv(process.env.MQTT_AUTO_CONNECT_CERT_VALIDATION, false)
+  const selfSignedCertificate = certificateAuthorityPath
+    ? { name: path.basename(certificateAuthorityPath), data: '' }
+    : undefined
+  const clientCertificate = clientCertificatePath ? { name: path.basename(clientCertificatePath), data: '' } : undefined
+  const clientKey = clientKeyPath ? { name: path.basename(clientKeyPath), data: '' } : undefined
+
+  return {
+    backend: {
+      id: connectionId,
+      options: {
+        url,
+        username: process.env.MQTT_AUTO_CONNECT_USERNAME,
+        password: process.env.MQTT_AUTO_CONNECT_PASSWORD,
+        tls: encryption,
+        certValidation,
+        clientId,
+        subscriptions,
+        certificateAuthorityPath,
+        clientCertificatePath,
+        clientKeyPath,
+      },
+    },
+    frontend: {
+      connection: {
+        configVersion: 1,
+        type: 'mqtt',
+        id: connectionId,
+        name: process.env.MQTT_AUTO_CONNECT_NAME || host,
+        host,
+        protocol,
+        basePath,
+        port,
+        username: process.env.MQTT_AUTO_CONNECT_USERNAME,
+        password: process.env.MQTT_AUTO_CONNECT_PASSWORD,
+        encryption,
+        certValidation,
+        selfSignedCertificate,
+        selfSignedCertificatePath: certificateAuthorityPath,
+        clientCertificate,
+        clientCertificatePath,
+        clientKey,
+        clientKeyPath,
+        clientId,
+        subscriptions,
+      },
+    },
+  }
+}
+
 /**
  * Validates and sanitizes file paths to prevent path traversal attacks
  * @param filename The filename to validate
@@ -288,42 +386,30 @@ async function startServer() {
     const autoConnectHost = process.env.MQTT_AUTO_CONNECT_HOST
     if (autoConnectHost) {
       const connectionId = `auto-connect-${Date.now()}`
+      const autoConnectConfig = buildAutoConnectConfig(connectionId)
+
+      if (!autoConnectConfig) {
+        return
+      }
+
+      socket.emit('auto-connect-config', autoConnectConfig.frontend)
 
       // Notify client immediately that auto-connect will happen
       socket.emit('auto-connect-initiated', { connectionId })
 
       // Delay auto-connect to give client time to subscribe to events
       setTimeout(() => {
-        const protocol = process.env.MQTT_AUTO_CONNECT_PROTOCOL || 'mqtt'
-        const port = parseInt(process.env.MQTT_AUTO_CONNECT_PORT || '1883')
-        const tls = protocol.endsWith('s') // mqtts or wss
-        const url = `${protocol}://${autoConnectHost}:${port}`
-
-        const autoConnectConfig = {
-          id: connectionId,
-          options: {
-            url,
-            username: process.env.MQTT_AUTO_CONNECT_USERNAME,
-            password: process.env.MQTT_AUTO_CONNECT_PASSWORD,
-            tls,
-            certValidation: false,
-            clientId:
-              process.env.MQTT_AUTO_CONNECT_CLIENT_ID || `mqtt-explorer-${Math.random().toString(16).substr(2, 8)}`,
-            subscriptions: [{ topic: '#', qos: 0 as 0 | 1 | 2 }], // Subscribe to all topics
-          },
-        }
-
         if (!isProduction) {
           console.log('Auto-connecting to MQTT broker:', {
             connectionId,
-            url: autoConnectConfig.options.url,
-            clientId: autoConnectConfig.options.clientId,
-            username: autoConnectConfig.options.username || '(none)',
+            url: autoConnectConfig.backend.options.url,
+            clientId: autoConnectConfig.backend.options.clientId,
+            username: autoConnectConfig.backend.options.username || '(none)',
           })
         }
 
         // Trigger connection via backend events
-        backendEvents.emit(addMqttConnectionEvent, autoConnectConfig)
+        backendEvents.emit(addMqttConnectionEvent, autoConnectConfig.backend)
       }, 1000) // 1 second delay to allow client to set up event subscriptions
     }
   })

@@ -6,7 +6,7 @@ import { connect } from 'react-redux'
 import { withStyles } from '@mui/styles'
 import { RpcEvents } from '../../../../events/EventsV2'
 import { CertificateParameters, ConnectionOptions } from '../../model/ConnectionOptions'
-import { CertificateTypes } from '../../actions/ConnectionManager'
+import { certificateTypeToPathField, CertificateTypes } from '../../actions/ConnectionManager'
 import { connectionManagerActions } from '../../actions'
 import ClearAdornment from '../helper/ClearAdornment'
 import { rendererRpc } from '../../eventBus'
@@ -22,12 +22,14 @@ function BrowserCertificateFileSelection(props: {
   connection: ConnectionOptions
 }) {
   const fileInputRef = React.useRef<HTMLInputElement>(null)
+  const certificatePathField = certificateTypeToPathField(props.certificateType)
 
   const clearCertificate = React.useCallback(() => {
     props.actions.connectionManager.updateConnection(props.connection.id, {
+      [certificatePathField]: undefined,
       [props.certificateType]: undefined,
     })
-  }, [props.connection, props.certificateType])
+  }, [certificatePathField, props.connection, props.certificateType])
 
   const handleFileSelect = React.useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -59,6 +61,7 @@ function BrowserCertificateFileSelection(props: {
 
             // Update connection
             props.actions.connectionManager.updateConnection(props.connection.id, {
+              [certificatePathField]: undefined,
               [props.certificateType]: certificate,
             })
           }
@@ -73,7 +76,7 @@ function BrowserCertificateFileSelection(props: {
         fileInputRef.current.value = ''
       }
     },
-    [props.connection.id, props.certificateType, props.actions.connectionManager]
+    [certificatePathField, props.connection.id, props.certificateType, props.actions.connectionManager]
   )
 
   const handleButtonClick = () => {

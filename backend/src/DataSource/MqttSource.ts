@@ -1,4 +1,5 @@
 import { URL } from 'url'
+import { readFileSync } from 'fs'
 
 import { type MqttClient, connect as mqttConnect } from 'mqtt'
 import { DataSource, DataSourceStateMachine } from './'
@@ -14,8 +15,11 @@ export interface MqttOptions {
   clientId?: string
   subscriptions: Array<Subscription>
   certificateAuthority?: string
+  certificateAuthorityPath?: string
   clientCertificate?: string
+  clientCertificatePath?: string
   clientKey?: string
+  clientKeyPath?: string
 }
 
 export interface Subscription {
@@ -24,6 +28,18 @@ export interface Subscription {
 }
 
 export type QoS = 0 | 1 | 2
+
+function resolveCertificateValue(encodedData?: string, filePath?: string): Buffer | undefined {
+  if (encodedData) {
+    return Buffer.from(encodedData, 'base64')
+  }
+
+  if (filePath) {
+    return readFileSync(filePath)
+  }
+
+  return undefined
+}
 
 export class MqttSource implements DataSource<MqttOptions> {
   public stateMachine: DataSourceStateMachine = new DataSourceStateMachine()
@@ -47,6 +63,19 @@ export class MqttSource implements DataSource<MqttOptions> {
       throw error
     }
 
+    let certificateAuthority
+    let clientCertificate
+    let clientKey
+
+    try {
+      certificateAuthority = resolveCertificateValue(options.certificateAuthority, options.certificateAuthorityPath)
+      clientCertificate = resolveCertificateValue(options.clientCertificate, options.clientCertificatePath)
+      clientKey = resolveCertificateValue(options.clientKey, options.clientKeyPath)
+    } catch (error) {
+      this.stateMachine.setError(error as Error)
+      throw error
+    }
+
     const client = mqttConnect(url.toString(), {
       resubscribe: false,
       rejectUnauthorized: options.certValidation,
@@ -54,9 +83,9 @@ export class MqttSource implements DataSource<MqttOptions> {
       password: options.password,
       clientId: options.clientId,
       servername: options.tls ? url.hostname : undefined,
-      ca: options.certificateAuthority ? Buffer.from(options.certificateAuthority, 'base64') : undefined,
-      cert: options.clientCertificate ? Buffer.from(options.clientCertificate, 'base64') : undefined,
-      key: options.clientKey ? Buffer.from(options.clientKey, 'base64') : undefined,
+      ca: certificateAuthority,
+      cert: clientCertificate,
+      key: clientKey,
     } as any)
 
     this.client = client
